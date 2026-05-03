@@ -2,10 +2,14 @@ import mongoose from "mongoose";
 
 const PatientSchema = new mongoose.Schema(
   {
-    name: String,
-    age: Number,
-    disease: String,
-    risk: String,
+    name: { type: String, required: true },
+    age: { type: Number, required: true },
+    disease: { type: String, required: true },
+
+    risk: { type: String, default: "Low" },
+    suggestion: { type: String, default: "" },
+
+    history: { type: String, default: "" },
   },
   { timestamps: true }
 );

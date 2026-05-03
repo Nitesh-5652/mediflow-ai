@@ -2,22 +2,53 @@
 
 import { useUser, SignInButton, UserButton } from "@clerk/nextjs";
 import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import RiskChart from "./components/RiskChart";
+
+const generateAIResult = (age: number, disease: string, history: string = "") => {
+  const cond = disease.toLowerCase();
+  const hist = history.toLowerCase();
+  let risk = "Low", suggestion = "", reason = "";
+
+  if (age > 50 && (cond.includes("heart") || cond.includes("pain") || hist.includes("surgery"))) {
+    risk = "High";
+    reason = "Critical age factor combined with cardiac symptoms or surgical history";
+    suggestion = "Urgent specialist referral and cardiac screening required.";
+  } else if (age > 30 && (cond.includes("pain") || cond.includes("diabetes") || cond.includes("bp"))) {
+    risk = "Medium";
+    reason = "Age-related chronic condition risk requiring regular monitoring";
+    suggestion = "Schedule a follow-up checkup and monitor vital signs weekly.";
+  } else {
+    risk = "Low";
+    reason = "General symptoms with no immediate high-risk indicators";
+    suggestion = "Standard clinical observation and routine monitoring.";
+  }
+  
+  return { risk, suggestion: `RISK: ${risk}\nREASON: ${reason}\nSUGGESTION: ${suggestion}` };
+};
 
 export default function Home() {
   const { user, isLoaded } = useUser();
-  const role = user?.publicMetadata?.role;
+  const router = useRouter();
+
+  // ✅ FINAL FIX: Using Metadata Role instead of hardcoded email
+  const isAdmin = user?.publicMetadata?.role === "admin";
+  const roleDisplay = isAdmin ? "👑 ADMIN" : "👤 USER";
 
   const [search, setSearch] = useState("");
   const [patients, setPatients] = useState<any[]>([]);
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
   const [disease, setDisease] = useState("");
+  const [history, setHistory] = useState(""); 
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [chartData, setChartData] = useState([]);
 
-  // --- Chat States ---
+  const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
+  const [date, setDate] = useState("");
+  const [timeHour, setTimeHour] = useState("10:00");
+  const [ampm, setAmpm] = useState("AM");
   const [chatOpen, setChatOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
@@ -30,242 +61,248 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory]);
+    if (chatOpen) chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatHistory, chatOpen]);
 
   const fetchPatients = async () => {
     try {
       const res = await fetch("/api/patients");
       const data = await res.json();
-      setPatients(Array.isArray(data) ? [...data] : []);
-    } catch (err) { console.error("Fetch Error:", err); }
+      setPatients(Array.isArray(data) ? data : []);
+    } catch (err) { console.error(err); }
   };
 
   const fetchChartStats = async () => {
     try {
       const res = await fetch("/api/stats");
       const data = await res.json();
-      setChartData(Array.isArray(data) ? [...data] : []);
-    } catch (err) { console.error("Chart Error:", err); }
+      setChartData(Array.isArray(data) ? data : []);
+    } catch (err) { console.error(err); }
+  };
+
+  const editPatient = async (p: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newName = prompt("Enter new name", p.name);
+    const newAge = prompt("Enter new age", p.age);
+    const newDisease = prompt("Enter new condition", p.disease);
+
+    if (!newName || !newAge || !newDisease) return;
+
+    try {
+      const res = await fetch("/api/patients", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: p._id,
+          name: newName,
+          age: Number(newAge),
+          disease: newDisease,
+        }),
+      });
+
+      if (res.ok) {
+        setPatients(prev =>
+          prev.map(item =>
+            item._id === p._id
+              ? { ...item, name: newName, age: Number(newAge), disease: newDisease }
+              : item
+          )
+        );
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  const analyzePatient = async (p: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLoadingId(p._id);
+    const ai = generateAIResult(p.age, p.disease, p.history);
+    try {
+      await fetch("/api/patients", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: p._id, risk: ai.risk, suggestion: ai.suggestion }),
+      });
+      setPatients(prev => 
+        prev.map(item => item._id === p._id ? { ...item, risk: ai.risk, suggestion: ai.suggestion } : item)
+      );
+    } catch (error) { console.error(error); } finally { setLoadingId(null); }
   };
 
   const addPatient = async () => {
-    if (role !== "admin") return alert("Access Denied");
-    if (!name || !age || !disease) return alert("Fill all fields");
-    await fetch("/api/patients", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, age: Number(age), disease }),
-    });
-    setName(""); setAge(""); setDisease("");
-    fetchPatients();
-    fetchChartStats();
-  };
-
-  // ✅ EDIT FUNCTION (RE-ADDED)
-  const editPatient = async (p: any) => {
-    if (role !== "admin") return alert("Access Denied");
-    const newName = prompt("Edit Name:", p.name);
-    const newAge = prompt("Edit Age:", p.age);
-    const newDisease = prompt("Edit Condition:", p.disease);
-    const parsedAge = Number(newAge);
-
-    if (!newName || isNaN(parsedAge) || !newDisease) return alert("Invalid Input");
-
+    if (!isAdmin) return alert("Unauthorized access: Admin only");
+    if (!name || !age || !disease) return alert("Please fill Name, Age, and Condition");
     try {
-      await fetch("/api/patients", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: p._id, name: newName, age: parsedAge, disease: newDisease }),
-      });
-      fetchPatients();
-      fetchChartStats();
-    } catch (err) { console.error("Edit Error:", err); }
-  };
-
-  const analyzePatient = async (p: any) => {
-    if (role !== "admin") return alert("Access Denied");
-    setLoadingId(p._id);
-    try {
-      const res = await fetch("/api/gemini", {
+      const res = await fetch("/api/patients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: p.name, age: p.age, disease: p.disease }),
+        body: JSON.stringify({ name, age: Number(age), disease, history: history.trim() || "No prior history" }),
       });
-      const data = await res.json();
-      const aiResponse = data.reply;
-
-      let risk = "Low";
-      if (aiResponse.toLowerCase().includes("high")) risk = "High";
-      else if (aiResponse.toLowerCase().includes("medium")) risk = "Medium";
-      
-      await fetch("/api/patients", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: p._id, risk, suggestion: aiResponse }),
-      });
-
-      // Manual state update for instant UI response
-      setPatients(prev => prev.map(item => 
-        item._id === p._id ? { ...item, suggestion: aiResponse, risk: risk } : item
-      ));
-
-      fetchChartStats();
-    } catch (error) {
-      console.error("Analysis Failed:", error);
-    } finally { setLoadingId(null); }
+      if (res.ok) {
+        setName(""); setAge(""); setDisease(""); setHistory("");
+        fetchPatients(); fetchChartStats();
+      }
+    } catch (err) { console.error(err); }
   };
 
-  const deletePatient = async (id: string) => {
-    if (role !== "admin") return alert("Access Denied");
-    if (!confirm("Delete this record?")) return;
-    await fetch("/api/patients", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    setPatients(prev => prev.filter(p => p._id !== id));
-    fetchChartStats();
+  const deletePatient = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Delete record?")) return;
+    await fetch("/api/patients", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    fetchPatients();
+  };
+
+  const bookAppointment = async () => {
+    if (!selectedPatient) return alert("Please select a patient first!");
+    const finalTime = `${timeHour} ${ampm}`;
+    try {
+      const res = await fetch("/api/appointments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patientId: selectedPatient, date, time: finalTime }),
+      });
+      if (res.ok) {
+        alert("Appointment booked ✅");
+        setSelectedPatient(null);
+      }
+    } catch (err) { console.error(err); }
   };
 
   const handleChat = async () => {
     if (!message.trim()) return;
-    const userMsg = message;
-    setMessage("");
-    setChatHistory(prev => [...prev, { role: "user", text: userMsg }]);
+    const msg = message; setMessage("");
+    setChatHistory(prev => [...prev, { role: "user", text: msg }]);
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg }),
-      });
+      const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: msg }) });
       const data = await res.json();
       setChatHistory(prev => [...prev, { role: "ai", text: data.reply }]);
-    } catch { setChatHistory(prev => [...prev, { role: "ai", text: "Error..." }]); }
+    } catch { setChatHistory(prev => [...prev, { role: "ai", text: "Assistant error..." }]); }
   };
 
-  if (!isLoaded) return <div className="h-screen bg-[#020617] flex items-center justify-center text-blue-500 font-black italic">LOADING MEDIFLOW...</div>;
-
-  if (!user) return (
-    <div className="h-screen bg-[#020617] flex flex-col items-center justify-center">
-       <h1 className="text-6xl font-black text-white italic mb-8 tracking-tighter">MEDIFLOW<span className="text-blue-500">AI</span></h1>
-       <SignInButton mode="modal">
-         <button className="bg-blue-600 text-white px-10 py-4 rounded-xl font-bold uppercase tracking-widest text-xs">Launch System</button>
-       </SignInButton>
-    </div>
-  );
+  if (!isLoaded) return <div className="h-screen bg-[#020617] flex items-center justify-center text-blue-500 font-black italic uppercase tracking-tighter text-xl">MEDIFLOW AI LOADING...</div>;
 
   return (
-    <div className="flex h-screen bg-[#020617] text-slate-200 overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-72 bg-[#020617] border-r border-slate-800/60 p-8 hidden lg:flex flex-col justify-between">
-        <div>
-          <div className="font-black text-white text-2xl italic mb-12 tracking-tighter">MEDIFLOW AI</div>
-          <div className="bg-blue-600/10 border border-blue-500/20 p-4 rounded-2xl">
-            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Active Session</p>
-            <p className="text-white font-bold mt-1 uppercase">{role || "Staff"}</p>
-          </div>
+    <div className="flex h-screen bg-[#020617] text-slate-200 overflow-hidden font-sans">
+      <aside className="w-80 bg-[#020617] border-r border-slate-800/60 p-8 hidden lg:flex flex-col">
+        <div className="font-black text-white text-2xl italic mb-4 tracking-tighter uppercase">Mediflow <span className="text-blue-500 italic">AI</span></div>
+        
+        {/* Role Badge for UX Clarity */}
+        <div className={`mb-10 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border text-center ${isAdmin ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-slate-800/50 border-slate-700 text-slate-500'}`}>
+           {roleDisplay}
         </div>
-        <div className="flex items-center gap-4 p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-           <UserButton />
-           <div className="overflow-hidden">
-              <p className="text-xs font-bold text-white truncate">{user.firstName}</p>
-              <p className="text-[10px] text-slate-500 uppercase font-black">Settings</p>
+
+        {selectedPatient && (
+          <div className="bg-blue-600/10 border border-blue-500/30 p-6 rounded-[28px] mb-6 shadow-2xl">
+            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Booking Slot</p>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 p-3 rounded-xl text-xs mb-3 text-white outline-none" />
+            <div className="flex gap-2 mb-4">
+              <input type="time" value={timeHour} onChange={(e) => setTimeHour(e.target.value)} className="flex-1 bg-[#0f172a] border border-slate-800 p-3 rounded-xl text-xs text-white outline-none" />
+              <select value={ampm} onChange={(e) => setAmpm(e.target.value)} className="bg-[#0f172a] border border-slate-800 p-3 rounded-xl text-xs text-blue-400 font-bold outline-none">
+                <option value="AM">AM</option><option value="PM">PM</option>
+              </select>
+            </div>
+            <button onClick={bookAppointment} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-blue-500 transition-all">Confirm Appointment</button>
+            <button onClick={() => setSelectedPatient(null)} className="w-full mt-3 text-[9px] text-slate-500 uppercase font-black tracking-widest">Cancel</button>
+          </div>
+        )}
+        <div className="mt-auto flex items-center gap-4 p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
+           <UserButton afterSignOutUrl="/" />
+           <div className="flex flex-col overflow-hidden">
+             <p className="text-xs font-bold text-white truncate">{user?.firstName || "User"}</p>
+             <p className="text-[9px] text-slate-500 truncate">{user?.primaryEmailAddress?.emailAddress}</p>
            </div>
         </div>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-20 flex items-center justify-between px-10 border-b border-slate-800/60 bg-[#020617]/80 backdrop-blur-md">
-          <h2 className="text-sm font-black uppercase tracking-[2px] text-slate-400">Clinical Dashboard</h2>
-          <input className="bg-slate-900 border border-slate-800 p-2.5 px-6 rounded-xl text-xs w-64 text-white outline-none focus:border-blue-500" placeholder="Search patients..." onChange={(e) => setSearch(e.target.value)} />
+        <header className="h-20 flex items-center justify-between px-10 border-b border-slate-800/60 bg-[#020617]/80 backdrop-blur-md z-10">
+          <h2 className="text-xs font-black uppercase tracking-[2px] text-slate-500 italic">Clinical Management</h2>
+          <div className="flex items-center gap-4">
+            <input className="bg-slate-900 border border-slate-800 p-2.5 px-6 rounded-xl text-xs w-64 text-white focus:border-blue-500 outline-none transition-all" placeholder="Search patients..." onChange={(e) => setSearch(e.target.value)} />
+            {!user && <SignInButton mode="modal"><button className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all">Sign In</button></SignInButton>}
+          </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-10 space-y-8">
-          {/* Chart */}
-          <section className="bg-[#0f172a] border border-slate-800 rounded-[32px] p-8 shadow-2xl">
-            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6">Patient Risk Analytics</h3>
-            <div className="w-full h-[280px]">{isClient && <RiskChart data={chartData} />}</div>
+        <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
+          <section className="bg-[#0f172a] border border-slate-800 rounded-[32px] p-8 shadow-2xl relative">
+            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-10">Risk Analytics Over Time</h3>
+            <div className="w-full h-[320px]">{isClient && <RiskChart data={chartData} />}</div>
           </section>
 
-          {/* Add Patient */}
-          {role === "admin" && (
-            <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-[24px] flex flex-col md:flex-row gap-4">
-              <input className="flex-1 bg-[#020617] border border-slate-800 p-4 rounded-xl text-sm" placeholder="Patient Name" value={name} onChange={(e) => setName(e.target.value)} />
-              <input className="w-24 bg-[#020617] border border-slate-800 p-4 rounded-xl text-sm" placeholder="Age" type="number" value={age} onChange={(e) => setAge(e.target.value)} />
-              <input className="flex-1 bg-[#020617] border border-slate-800 p-4 rounded-xl text-sm" placeholder="Condition" value={disease} onChange={(e) => setDisease(e.target.value)} />
-              <button className="bg-blue-600 px-8 py-4 rounded-xl font-black text-xs uppercase hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/20" onClick={addPatient}>Register</button>
+          {isAdmin ? (
+            <div className="bg-slate-900/40 border border-slate-800 p-8 rounded-[28px] grid gap-5">
+              <h3 className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Register New Entry</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input className="bg-[#020617] border border-slate-800 p-4 rounded-xl text-sm text-white outline-none" placeholder="Patient Name" value={name} onChange={(e) => setName(e.target.value)} />
+                <input className="bg-[#020617] border border-slate-800 p-4 rounded-xl text-sm text-white outline-none" placeholder="Age" type="number" value={age} onChange={(e) => setAge(e.target.value)} />
+                <input className="bg-[#020617] border border-slate-800 p-4 rounded-xl text-sm text-white outline-none" placeholder="Condition" value={disease} onChange={(e) => setDisease(e.target.value)} />
+              </div>
+              <div className="flex gap-4">
+                <input className="flex-1 bg-[#020617] border border-slate-800 p-4 rounded-xl text-sm text-white outline-none" placeholder="Medical History" value={history} onChange={(e) => setHistory(e.target.value)} />
+                <button className="bg-blue-600 px-10 py-4 rounded-xl font-black text-xs uppercase hover:bg-blue-500 shadow-lg" onClick={addPatient}>Register</button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 bg-slate-900/20 border border-dashed border-slate-800 rounded-[28px] text-center">
+              <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Dashboard View-Only Mode</p>
             </div>
           )}
 
-          {/* Patient List */}
-          <div className="grid gap-4">
+          <div className="grid gap-6 pb-20">
             {patients.filter(p => p.name.toLowerCase().includes(search.toLowerCase())).map((p) => (
-              <div key={p._id} className="bg-[#0f172a] border border-slate-800 p-6 rounded-[24px] hover:border-slate-600 transition-all group">
+              <div key={p._id} className={`bg-[#0f172a] border ${selectedPatient === p._id ? 'border-blue-500 bg-[#1e293b]' : 'border-slate-800'} p-8 rounded-[32px] hover:border-slate-600 transition-all shadow-xl`}>
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-                  <div className="flex gap-4 items-center flex-1">
-                    <div className="w-12 h-12 bg-slate-800 text-blue-400 rounded-xl flex items-center justify-center font-black group-hover:bg-blue-600 group-hover:text-white transition-all">{p.name.charAt(0)}</div>
-                    <div>
-                      <h4 className="font-bold text-lg text-white">{p.name}</h4>
-                      <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{p.disease} • {p.age} Yrs</p>
+                  <div className="flex gap-5 items-center">
+                    <div className="w-16 h-16 bg-slate-800 text-blue-400 rounded-2xl flex items-center justify-center text-2xl font-black italic">{p.name[0]}</div>
+                    <div onClick={() => router.push(`/patient/${p._id}`)} className="cursor-pointer">
+                      <h4 className="font-bold text-2xl text-white italic">{p.name}</h4>
+                      <p className="text-[10px] text-slate-500 font-black uppercase mt-1 tracking-widest">{p.disease} • {p.age} YRS</p>
                     </div>
                   </div>
-
-                  <div className="flex gap-2 w-full lg:w-auto">
-                    {role === "admin" && (
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => setSelectedPatient(p._id)} className="px-5 py-3 bg-green-500/10 text-green-500 border border-green-500/20 rounded-xl text-[9px] font-black uppercase hover:bg-green-600 hover:text-white transition-all">Book Appt</button>
+                    {isAdmin && (
                       <>
-                        <button onClick={() => analyzePatient(p)} disabled={loadingId === p._id} className="flex-1 lg:flex-none px-4 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-[10px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
-                          {loadingId === p._id ? "Processing..." : "AI Intelligence"}
+                        <button onClick={(e) => analyzePatient(p, e)} disabled={loadingId === p._id} className="px-5 py-3 bg-blue-600 text-white border border-blue-500/20 rounded-xl text-[9px] font-black uppercase hover:bg-blue-400 transition-all shadow-md">
+                          {loadingId === p._id ? "Thinking..." : "AI Intelligence"}
                         </button>
-                        {/* ✅ EDIT BUTTON ADDED BACK */}
-                        <button onClick={() => editPatient(p)} className="flex-1 lg:flex-none px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-[10px] font-black uppercase hover:bg-slate-700 transition-all">
-                          Edit
-                        </button>
-                        <button onClick={() => deletePatient(p._id)} className="flex-1 lg:flex-none px-4 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all">
-                          Delete
-                        </button>
+                        <button onClick={(e) => editPatient(p, e)} className="px-5 py-3 bg-slate-800 text-slate-300 border border-slate-700 rounded-xl text-[9px] font-black uppercase hover:bg-slate-700 transition-all">Edit</button>
+                        <button onClick={(e) => deletePatient(p._id, e)} className="px-5 py-3 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl text-[9px] font-black uppercase hover:bg-red-600 hover:text-white transition-all">Delete</button>
                       </>
                     )}
                   </div>
                 </div>
-
-                {/* AI Result Box */}
-                {loadingId === p._id ? (
-                  <div className="mt-4 text-[10px] font-black text-blue-500 animate-pulse uppercase">Analyzing Clinical Data...</div>
-                ) : (
-                  p.suggestion && (
-                    <div className="mt-4 p-4 bg-[#020617] rounded-xl border-l-4 border-blue-500">
-                      <p className="text-xs italic text-slate-400 leading-relaxed">"{p.suggestion}"</p>
+                <div className="mt-8 grid md:grid-cols-2 gap-5">
+                   <div className="p-6 bg-[#020617] rounded-[24px] border border-slate-800/60">
+                      <p className="text-[10px] font-black text-slate-500 uppercase mb-3 tracking-widest">Medical History</p>
+                      <p className="text-[14px] text-slate-300 leading-relaxed italic">{p.history || "No prior history recorded."}</p>
+                   </div>
+                   {p.suggestion && (
+                    <div className={`p-6 bg-[#020617] rounded-[24px] border-l-4 shadow-2xl animate-in zoom-in duration-500 ${p.risk === "High" ? "border-red-500" : p.risk === "Medium" ? "border-yellow-500" : "border-blue-500"}`}>
+                      <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-3">AI Diagnostic Summary</p>
+                      <pre className="text-[12px] text-slate-300 font-sans whitespace-pre-wrap leading-normal uppercase tracking-tight italic">{p.suggestion}</pre>
                     </div>
-                  )
-                )}
+                   )}
+                </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Floating Chat */}
-        <button onClick={() => setChatOpen(!chatOpen)} className="fixed bottom-8 right-8 bg-blue-600 text-white w-14 h-14 rounded-2xl shadow-2xl flex items-center justify-center text-xl z-50 hover:scale-110 active:scale-95 transition-all border border-blue-400/30">
-          {chatOpen ? "✕" : "💬"}
-        </button>
-
+        <button onClick={() => setChatOpen(!chatOpen)} className="fixed bottom-10 right-10 w-16 h-16 bg-blue-600 text-white rounded-[22px] shadow-2xl flex items-center justify-center z-50 hover:scale-110 active:scale-95 transition-all">{chatOpen ? "✕" : "💬"}</button>
         {chatOpen && (
-          <div className="fixed bottom-24 right-8 w-96 h-[500px] bg-[#0f172a] border border-slate-800 rounded-[32px] shadow-2xl flex flex-col overflow-hidden z-50">
-            <div className="bg-blue-600 p-5 font-black text-[10px] uppercase text-white tracking-widest">MediFlow Assistant</div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="fixed bottom-28 right-10 w-[420px] h-[550px] bg-[#0f172a] border border-slate-800 rounded-[32px] shadow-2xl flex flex-col overflow-hidden z-50 animate-in slide-in-from-bottom duration-300">
+            <div className="bg-blue-600 p-5 flex items-center justify-between"><p className="text-white font-black text-xs uppercase italic">Mediflow Neural Chat</p></div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {chatHistory.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`p-3 max-w-[80%] rounded-xl text-xs ${msg.role === "user" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"}`}>
-                    {msg.text}
-                  </div>
+                  <div className={`p-4 max-w-[85%] rounded-[20px] text-xs ${msg.role === "user" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300 border border-slate-700"}`}>{msg.text}</div>
                 </div>
               ))}
               <div ref={chatEndRef} />
             </div>
-            <div className="p-4 bg-[#020617] flex gap-2">
-              <input value={message} onChange={(e) => setMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleChat()} className="flex-1 bg-slate-900 border border-slate-800 p-3 rounded-lg text-xs text-white" placeholder="Ask AI..." />
-              <button onClick={handleChat} className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs uppercase">Send</button>
+            <div className="p-5 bg-[#020617] flex gap-3 border-t border-slate-800">
+              <input value={message} onChange={(e) => setMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleChat()} className="flex-1 bg-slate-900 border border-slate-800 p-4 rounded-xl text-xs text-white outline-none focus:border-blue-500" placeholder="Clinical inquiry..." />
+              <button onClick={handleChat} className="bg-blue-600 text-white px-6 rounded-xl font-black text-[10px] uppercase shadow-lg">Send</button>
             </div>
           </div>
         )}
