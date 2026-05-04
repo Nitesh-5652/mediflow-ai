@@ -46,7 +46,7 @@ export async function PATCH(req: Request) {
         ...(body.risk && { risk: body.risk }),
         ...(body.suggestion && { suggestion: body.suggestion }),
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     return NextResponse.json(updated);
