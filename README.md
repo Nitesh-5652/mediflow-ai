@@ -1,36 +1,147 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MediFlow AI
 
-## Getting Started
+AI-powered healthcare management system built with Next.js, MongoDB, Clerk Authentication, and Gemini AI.
 
-First, run the development server:
+---
+
+## 🚀 Live Demo
+
+https://mediflow-ai-ashy.vercel.app
+
+---
+
+## 📌 Features
+
+* Patient Registration System
+* AI-Based Health Summary
+* Appointment Booking
+* Patient Edit/Delete
+* MongoDB Database Integration
+* Clerk Authentication
+* Responsive Dashboard UI
+* Real-Time API Integration
+* Production Deployment on Vercel
+
+---
+
+## 🛠 Tech Stack
+
+### Frontend
+
+* Next.js 16
+* TypeScript
+* Tailwind CSS
+* React
+
+### Backend
+
+* Next.js API Routes
+* MongoDB Atlas
+* Mongoose
+
+### Authentication
+
+* Clerk
+
+### AI Integration
+
+* Google Gemini API
+
+### Deployment
+
+* Vercel
+
+---
+
+## ⚙️ Environment Variables
+
+Create:
+
+```bash
+apps/web/.env.local
+```
+
+Add:
+
+```env
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+MONGODB_URI=
+GEMINI_API_KEY=
+RESEND_API_KEY=
+```
+
+---
+
+## 📦 Installation
+
+```bash
+git clone https://github.com/Nitesh-5652/mediflow-ai.git
+```
+
+```bash
+cd mediflow-ai
+```
+
+```bash
+npm install
+```
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🌐 Deployment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Deployed using:
 
-## Learn More
+* Vercel
+* MongoDB Atlas
+* Clerk Production Keys
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📸 Screenshots
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Add screenshots inside:
 
-## Deploy on Vercel
+```bash
+screenshots/
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Recommended:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+* Dashboard
+* AI Summary
+* Patient Management
+* Appointment System
+
+---
+
+## 📄 License
+
+MIT License
+
+---
+
+## 👨‍💻 Developer
+
+Nitesh Sharma
+
+GitHub:
+https://github.com/Nitesh-5652
+
+---
+
+## ⭐ Project Status
+
+✅ Production Ready
+✅ Fully Deployed
+✅ MongoDB Connected
+✅ AI Features Working
+✅ Authentication Working
+<img width="1920" height="1080" alt="Screenshot 2026-05-06 230209" src="https://github.com/user-attachments/assets/71a110ea-4ac2-4558-93bb-c689a43fe8f2" />
+<img width="1920" height="1080" alt="Screenshot 2026-05-06 230153" src="https://github.com/user-attachments/assets/84bcdd28-6b59-4686-a08b-137ecbe8fc44" />
+<img width="1920" height="1080" alt="Screenshot 2026-05-06 230133" src="https://github.com/user-attachments/assets/9ff06d1b-bce8-407b-acee-6f8f021db8b9" />
