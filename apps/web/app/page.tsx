@@ -63,7 +63,7 @@ export default function Home() {
   const [history, setHistory] = useState(""); 
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
-  const [chartData, setChartData] = useState([]);
+  const [chartData, setChartData] = useState<any[]>([]);
 
   // ✅ EDIT STATE (New)
   const [editingPatient, setEditingPatient] = useState<any>(null);
@@ -221,7 +221,7 @@ export default function Home() {
         )}
 
         <div className="mt-auto flex items-center gap-4 p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-           <UserButton afterSignOutUrl="/" />
+           <UserButton />
            <div className="flex flex-col overflow-hidden">
              <p className="text-xs font-bold text-white truncate">{user?.firstName || "User"}</p>
              <p className="text-[9px] text-slate-500 truncate">{user?.primaryEmailAddress?.emailAddress}</p>
