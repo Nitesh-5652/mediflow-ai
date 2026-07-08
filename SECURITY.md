@@ -1,147 +1,139 @@
 # Security Policy
 
-## Overview
+## Reporting Security Vulnerabilities
 
-MediFlow AI takes security seriously. This document outlines our security practices and policies.
+**Please do NOT open public GitHub issues for security vulnerabilities.**
 
----
+Instead, use GitHub's private vulnerability reporting:
 
-## Reporting Security Issues
+1. Go to the [Security Advisories](https://github.com/Nitesh-5652/mediflow-ai/security/advisories) tab
+2. Click "Report a vulnerability"
+3. Provide details about the security issue
+4. Submit the report
 
-⚠️ **IMPORTANT**: Do NOT open public GitHub issues for security vulnerabilities.
-
-### To Report a Security Issue
-
-Email: **security@mediflow-ai.example.com**
-
-Include:
-- Description of the vulnerability
-- Steps to reproduce (if applicable)
-- Potential impact
-- Suggested fix (if you have one)
-
-### Response Timeline
-
+**Response Timeline:**
 - **24 hours**: Initial acknowledgment
-- **72 hours**: Initial assessment
-- **30 days**: Security patch release
+- **72 hours**: Assessment and triage
+- **7 days**: Patch release or public disclosure decision
 
 ---
 
-## Security Best Practices
+## Current Security Measures
 
-### Authentication & Authorization
-- ✅ Use Clerk for enterprise SSO
-- ✅ Enforce strong passwords (minimum 12 characters)
-- ✅ Implement 2FA/MFA
-- ✅ Use role-based access control (RBAC)
-- ✅ Implement JWT token expiration (15 minutes access, 7 days refresh)
-- ✅ Validate tokens on every request
-- ✅ Use HTTP-only cookies for sensitive tokens
+### Authentication
+- Clerk integration for user authentication and SSO
+- JWT token-based session management
+- Environment-based credential storage
 
 ### Data Protection
-- ✅ Encrypt data in transit (HTTPS/TLS 1.3+)
-- ✅ Encrypt sensitive data at rest
-- ✅ Use environment variables for secrets (never hardcode)
-- ✅ Implement data masking for logs
-- ✅ Follow HIPAA compliance for healthcare data
-- ✅ Regular data backups (daily minimum)
-- ✅ Implement audit logging for sensitive operations
+- MongoDB encryption (Atlas)
+- HTTPS/TLS for all communications
+- Environment variables for secrets (never hardcoded)
+- Sensitive data excluded from logs
 
-### API Security
-- ✅ Implement rate limiting (100 requests per minute per IP)
-- ✅ Input validation and sanitization
-- ✅ Output encoding (prevent XSS)
-- ✅ CORS configuration with allowed origins only
-- ✅ API versioning
-- ✅ CSRF protection (SameSite cookies)
-- ✅ Request signing/authentication
-
-### Frontend Security
-- ✅ Content Security Policy (CSP) headers
-- ✅ X-Frame-Options: DENY (prevent clickjacking)
-- ✅ X-Content-Type-Options: nosniff
-- ✅ X-XSS-Protection headers
-- ✅ Secure cookie attributes (HttpOnly, Secure, SameSite)
-- ✅ Input validation on client and server
-- ✅ Prevent DOM-based XSS
-
-### Infrastructure Security
-- ✅ HTTPS/TLS for all communication
-- ✅ Database connection pooling
-- ✅ Firewall and network segmentation
-- ✅ Regular security updates (patch management)
-- ✅ Vulnerability scanning (OWASP Top 10)
-- ✅ Web Application Firewall (WAF)
-- ✅ DDoS protection
+### Code Quality
+- TypeScript strict mode enabled
+- ESLint configuration for code quality
+- Input validation with Zod schemas
+- Error handling middleware
 
 ### Dependency Management
-- ✅ Regular dependency updates
-- ✅ Vulnerability scanning (npm audit, Snyk)
-- ✅ Lock dependency versions
-- ✅ Review security advisories
-- ✅ Remove unused dependencies
-- ✅ Only use trusted packages
+- Locked dependency versions in package-lock.json
+- Regular npm audit checks (via CI/CD)
+- Automated dependency vulnerability scanning with GitHub Actions
+- Manual review of security advisories
 
-### Code Security
-- ✅ Code reviews (mandatory for all PRs)
-- ✅ Static code analysis (ESLint, SonarQube)
-- ✅ No hardcoded secrets
-- ✅ Secure logging (no sensitive data in logs)
-- ✅ Error handling without exposing internals
-- ✅ SQL injection prevention (parameterized queries)
-- ✅ Command injection prevention
-
-### Monitoring & Incident Response
-- ✅ Real-time security monitoring
-- ✅ Log aggregation and analysis
-- ✅ Security alerting
-- ✅ Incident response plan
-- ✅ Regular security audits
-- ✅ Penetration testing (quarterly)
-- ✅ Security incident tracking
+### API Security
+- CORS configuration in Next.js
+- Security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection)
+- Referrer-Policy enforcement
+- Input validation on API routes
 
 ---
 
-## HIPAA Compliance
+## Recommended Security Practices
 
-As a healthcare platform, MediFlow AI complies with HIPAA (Health Insurance Portability and Accountability Act):
+### For Contributors
+- Use environment variables for all secrets
+- Never commit `.env.local` files
+- Run `npm audit` before pushing changes
+- Validate and sanitize user input
+- Use TypeScript strict mode
+- Write security-focused tests
 
-- ✅ Protected Health Information (PHI) encryption
-- ✅ Access controls and authentication
-- ✅ Audit logs for all PHI access
-- ✅ Business Associate Agreements (BAA)
-- ✅ Data breach notification procedures
-- ✅ Minimum necessary principle
-- ✅ Regular security risk assessments
+### For Operators
+- Keep dependencies updated
+- Monitor security advisories regularly
+- Maintain secure backups
+- Review environment variable access
+- Enable database encryption
+- Use strong authentication credentials
+- Implement rate limiting at the API gateway
+- Monitor application logs for suspicious activity
+
+### For Users
+- Use strong passwords
+- Enable multi-factor authentication (when available)
+- Keep browser and OS updated
+- Report suspected vulnerabilities responsibly
 
 ---
 
-## Security Scanning Tools
+## Deployment Security
+
+When deploying to production:
+- Verify all environment variables are set correctly
+- Use production-grade secrets management (e.g., GitHub Secrets, Vercel Environment Variables)
+- Enable HTTPS/TLS
+- Configure CORS for your domain only
+- Keep Node.js and dependencies up to date
+- Monitor application performance and logs
+- Set up automated backups
+
+---
+
+## Known Limitations
+
+This is a production-ready application with strong security foundations. However, before healthcare deployment:
+
+- Conduct a security audit for HIPAA/HITRUST compliance if required
+- Perform penetration testing in your environment
+- Review and customize security policies for your use case
+- Implement business continuity and disaster recovery plans
+- Establish incident response procedures
+
+---
+
+## Security Scanning
+
+Contributors can perform local security checks:
 
 ```bash
-# Dependency vulnerability scanning
+# Check for vulnerability in dependencies
 npm audit
-npm audit fix
 
-# Code linting
+# Run linter for code quality
 npm run lint
 
 # Type checking
 npm run type-check
 
-# OWASP scanning
-# Use: npm install -g snyk
-snyk test
+# Build validation
+npm run build
 ```
 
 ---
 
-## Acknowledgments
+## Version History
 
-We appreciate the security research community's efforts in identifying vulnerabilities. Responsible disclosure helps us maintain a secure platform for all users.
+### v1.0.0 (2026-07-08)
+- Initial security policy
+- Environment validation
+- TypeScript strict mode
+- Security headers configuration
+- API input validation
 
 ---
 
 **Last Updated**: 2026-07-08
-**Status**: Active
+**Maintained By**: Nitesh Sharma (@Nitesh-5652)
